@@ -187,4 +187,12 @@ mod test {
         bowling.roll(3);
         assert_eq!(23, bowling.score());
     }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_rolls() {
+        let mut bowling = TenPinBowling::new();
+        bowling.roll(4);
+        bowling.roll(8); // now frame is 11 which is invalid
+    }
 }
