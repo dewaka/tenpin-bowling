@@ -12,11 +12,19 @@ struct Frame {
 
 impl Frame {
     fn with_roll(pins: i32) -> Self {
+        if pins > STRIKE {
+            panic!("Invalid pins for frame: {}", pins);
+        }
         Self { rolls: vec![pins] }
     }
 
-    fn roll(&mut self, pins: i32) {
-        self.rolls.push(pins);
+    fn roll(&mut self, pins: i32) -> Result<(), String> {
+        // A frame cannot be more than a full STRIKE
+        if self.sum() + pins > STRIKE {
+            Err(format!("Frame cannot be more than a full STRIKE"))
+        } else {
+            Ok(self.rolls.push(pins))
+        }
     }
 
     fn complete(&self) -> bool {
@@ -47,16 +55,14 @@ pub struct TenPinBowling {
 }
 
 impl TenPinBowling {
-    fn update_frames(&mut self, pins: i32) {
+    fn update_frames(&mut self, pins: i32) -> Result<(), String> {
         match self.current_frame_mut() {
-            None => {
-                self.add_new_frame(pins);
-            }
+            None => Ok(self.add_new_frame(pins)),
             Some(frame) => {
                 if frame.complete() {
-                    self.add_new_frame(pins);
+                    Ok(self.add_new_frame(pins))
                 } else {
-                    frame.roll(pins);
+                    frame.roll(pins)
                 }
             }
         }
@@ -117,8 +123,13 @@ impl TenPinBowling {
 
 impl Bowling for TenPinBowling {
     fn roll(&mut self, pins: i32) {
-        self.update_frames(pins);
-        self.update_score();
+        if pins <= STRIKE {
+            let ok = self.update_frames(pins);
+            if ok.is_err() {
+                panic!("Updating frames failed!");
+            }
+            self.update_score();
+        }
     }
 
     fn score(&self) -> i32 {
