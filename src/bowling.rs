@@ -148,49 +148,48 @@ mod test {
     #[test]
     fn test_single_roll_score() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(5);
+        bowling.roll(5).unwrap();
         assert_eq!(5, bowling.score());
     }
 
     #[test]
     fn test_frame_score() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(5);
-        bowling.roll(4);
+        bowling.roll(5).unwrap();
+        bowling.roll(4).unwrap();
         assert_eq!(9, bowling.score());
     }
 
     #[test]
     fn test_frame_with_strike() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(10);
+        bowling.roll(10).unwrap();
         assert_eq!(10, bowling.score());
     }
 
     #[test]
     fn test_rolls_after_strike() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(10);
-        bowling.roll(5);
-        bowling.roll(4);
+        bowling.roll(10).unwrap();
+        bowling.roll(5).unwrap();
+        bowling.roll(4).unwrap();
         assert_eq!(28, bowling.score());
     }
 
     #[test]
     fn test_rolls_after_spare() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(4);
-        bowling.roll(6);
-        bowling.roll(5);
-        bowling.roll(3);
+        bowling.roll(4).unwrap();
+        bowling.roll(6).unwrap();
+        bowling.roll(5).unwrap();
+        bowling.roll(3).unwrap();
         assert_eq!(23, bowling.score());
     }
 
     #[test]
-    #[should_panic]
     fn test_invalid_rolls() {
         let mut bowling = TenPinBowling::new();
-        bowling.roll(4);
-        bowling.roll(8); // now frame is 11 which is invalid
+        assert!(bowling.roll(4).is_ok());
+        assert!(bowling.roll(8).is_err()); // now frame is 11 which is invalid
     }
 }
