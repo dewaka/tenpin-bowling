@@ -1,5 +1,17 @@
+use thiserror::Error;
+
+#[derive(Error, Debug, Eq, PartialEq)]
+pub enum BowlingError {
+    #[error("invalid roll")]
+    InvalidRoll(String),
+    #[error("invalid frame")]
+    InvalidFrame(String),
+    #[error("io error")]
+    IOError,
+}
+
 pub trait Bowling {
-    fn roll(&mut self, pins: i32) -> Result<(), String>;
+    fn roll(&mut self, pins: i32) -> Result<(), BowlingError>;
     fn score(&self) -> i32;
 }
 
@@ -11,16 +23,22 @@ struct Frame {
 }
 
 impl Frame {
-    fn with_roll(pins: i32) -> Self {
+    fn with_roll(pins: i32) -> Result<Self, BowlingError> {
         if pins > STRIKE {
-            panic!("Invalid pins for frame: {}", pins);
+            Err(BowlingError::InvalidRoll(format!(
+                "Invalid pins for frame: {}",
+                pins
+            )))
+        } else {
+            Ok(Self { rolls: vec![pins] })
         }
-        Self { rolls: vec![pins] }
     }
 
-    fn roll(&mut self, pins: i32) -> Result<(), String> {
+    fn roll(&mut self, pins: i32) -> Result<(), BowlingError> {
         if self.sum() + pins > STRIKE {
-            Err(format!("Frame cannot be more than a full STRIKE"))
+            Err(BowlingError::InvalidFrame(format!(
+                "Frame cannot be more than a full STRIKE"
+            )))
         } else {
             Ok(self.rolls.push(pins))
         }
@@ -54,12 +72,12 @@ pub struct TenPinBowling {
 }
 
 impl TenPinBowling {
-    fn update_frames(&mut self, pins: i32) -> Result<(), String> {
+    fn update_frames(&mut self, pins: i32) -> Result<(), BowlingError> {
         match self.current_frame_mut() {
-            None => Ok(self.add_new_frame(pins)),
+            None => self.add_new_frame(pins),
             Some(frame) => {
                 if frame.complete() {
-                    Ok(self.add_new_frame(pins))
+                    self.add_new_frame(pins)
                 } else {
                     frame.roll(pins)
                 }
@@ -67,8 +85,9 @@ impl TenPinBowling {
         }
     }
 
-    fn add_new_frame(&mut self, pins: i32) {
-        self.frames.push(Frame::with_roll(pins));
+    fn add_new_frame(&mut self, pins: i32) -> Result<(), BowlingError> {
+        let frame = Frame::with_roll(pins)?;
+        Ok(self.frames.push(frame))
     }
 
     fn update_score(&mut self) {
@@ -121,12 +140,15 @@ impl TenPinBowling {
 }
 
 impl Bowling for TenPinBowling {
-    fn roll(&mut self, pins: i32) -> Result<(), String> {
+    fn roll(&mut self, pins: i32) -> Result<(), BowlingError> {
         if pins <= STRIKE {
             self.update_frames(pins)?;
             Ok(self.update_score())
         } else {
-            Err(format!("Invalid roll with pins: {}", pins))
+            Err(BowlingError::InvalidRoll(format!(
+                "Invalid roll with pins: {}",
+                pins
+            )))
         }
     }
 
