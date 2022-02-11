@@ -1,5 +1,5 @@
 pub trait Bowling {
-    fn roll(&mut self, pins: i32);
+    fn roll(&mut self, pins: i32) -> Result<(), String>;
     fn score(&self) -> i32;
 }
 
@@ -19,7 +19,6 @@ impl Frame {
     }
 
     fn roll(&mut self, pins: i32) -> Result<(), String> {
-        // A frame cannot be more than a full STRIKE
         if self.sum() + pins > STRIKE {
             Err(format!("Frame cannot be more than a full STRIKE"))
         } else {
@@ -122,13 +121,12 @@ impl TenPinBowling {
 }
 
 impl Bowling for TenPinBowling {
-    fn roll(&mut self, pins: i32) {
+    fn roll(&mut self, pins: i32) -> Result<(), String> {
         if pins <= STRIKE {
-            let ok = self.update_frames(pins);
-            if ok.is_err() {
-                panic!("Updating frames failed!");
-            }
-            self.update_score();
+            self.update_frames(pins)?;
+            Ok(self.update_score())
+        } else {
+            Err(format!("Invalid roll with pins: {}", pins))
         }
     }
 
