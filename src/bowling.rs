@@ -6,6 +6,12 @@ pub enum BowlingError {
     InvalidRoll(String),
     #[error("invalid frame")]
     InvalidFrame(String),
+    #[error("game already finished")]
+    GameFinished(String),
+    #[error("invalid pins error")]
+    InvalidPins,
+    #[error("bonus error")]
+    BonusError,
     #[error("io error")]
     IOError,
 }
@@ -13,13 +19,17 @@ pub enum BowlingError {
 pub trait Bowling {
     fn roll(&mut self, pins: i32) -> Result<(), BowlingError>;
     fn score(&self) -> i32;
+    fn finished(&self) -> bool;
 }
 
 static STRIKE: i32 = 10;
+static MAX_FRAMES: usize = 10;
 
 #[derive(Debug)]
 struct Frame {
     rolls: Vec<i32>,
+    bonus: Vec<i32>,
+    score: i32,
 }
 
 impl Frame {
@@ -30,22 +40,66 @@ impl Frame {
                 pins
             )))
         } else {
-            Ok(Self { rolls: vec![pins] })
+            Ok(Self {
+                rolls: vec![pins],
+                bonus: vec![],
+                score: 0,
+            })
         }
     }
 
-    fn roll(&mut self, pins: i32) -> Result<(), BowlingError> {
-        if self.sum() + pins > STRIKE {
-            Err(BowlingError::InvalidFrame(format!(
-                "Frame cannot be more than a full STRIKE"
-            )))
+    fn roll(&mut self, pins: i32, last: bool) -> Result<(), BowlingError> {
+        let sum = self.roll_sum() + pins;
+
+        if last {
+            if sum > STRIKE * 3 {
+                return Err(BowlingError::InvalidFrame(format!(
+                    "Last frame cannot be more than a {}",
+                    3 * STRIKE
+                )));
+            }
+        } else if sum > STRIKE {
+            return Err(BowlingError::InvalidFrame(format!(
+                "Current frame cannot be more than a {}",
+                STRIKE
+            )));
+        }
+
+        self.rolls.push(pins);
+        if self.can_score() {
+            self.score = self.roll_sum();
+        }
+        Ok(())
+    }
+
+    fn bonus(&mut self, pins: i32) -> Result<(), BowlingError> {
+        if pins > STRIKE {
+            return Err(BowlingError::InvalidPins);
+        }
+
+        if self.bonus_complete() {
+            Err(BowlingError::BonusError)
         } else {
-            Ok(self.rolls.push(pins))
+            Ok(self.bonus.push(pins))
         }
     }
 
-    fn complete(&self) -> bool {
-        self.strike() || self.rolls.len() >= 2
+    fn bonus_complete(&self) -> bool {
+        if self.strike() {
+            self.bonus.len() == 2
+        } else if self.spare() {
+            self.bonus.len() == 1
+        } else {
+            true
+        }
+    }
+
+    fn complete(&self, last: bool) -> bool {
+        if last {
+            self.rolls.len() == 3
+        } else {
+            self.strike() || self.rolls.len() == 2
+        }
     }
 
     fn strike(&self) -> bool {
@@ -53,15 +107,23 @@ impl Frame {
     }
 
     fn spare(&self) -> bool {
-        self.rolls.len() == 2 && self.sum() == STRIKE
+        self.rolls.len() == 2 && self.roll_sum() == STRIKE
     }
 
-    fn sum(&self) -> i32 {
+    fn total(&self) -> i32 {
+        self.roll_sum() + self.bonus_sum()
+    }
+
+    fn roll_sum(&self) -> i32 {
         self.rolls.iter().sum()
     }
 
-    fn last_roll(&self) -> i32 {
-        *self.rolls.last().unwrap()
+    fn bonus_sum(&self) -> i32 {
+        self.bonus.iter().sum()
+    }
+
+    fn can_score(&self) -> bool {
+        !self.spare() && !self.strike()
     }
 }
 
@@ -73,16 +135,36 @@ pub struct TenPinBowling {
 
 impl TenPinBowling {
     fn update_frames(&mut self, pins: i32) -> Result<(), BowlingError> {
+        let last_frame = self.last_frame();
+
         match self.current_frame_mut() {
             None => self.add_new_frame(pins),
             Some(frame) => {
-                if frame.complete() {
-                    self.add_new_frame(pins)
+                if frame.complete(last_frame) {
+                    self.add_new_frame(pins)?;
                 } else {
-                    frame.roll(pins)
+                    frame.roll(pins, last_frame)?;
                 }
+                Ok(self.update_bonus(pins))
             }
         }
+    }
+
+    fn last_frame(&self) -> bool {
+        self.frames.len() == MAX_FRAMES
+    }
+
+    fn update_bonus(&mut self, pins: i32) {
+        if self.frames.len() < 2 {
+            return;
+        }
+
+        let to = self.frames.len() - 1;
+        self.frames.iter_mut().take(to).for_each(|f| {
+            if !f.bonus_complete() {
+                f.bonus(pins).unwrap();
+            }
+        });
     }
 
     fn add_new_frame(&mut self, pins: i32) -> Result<(), BowlingError> {
@@ -91,44 +173,11 @@ impl TenPinBowling {
     }
 
     fn update_score(&mut self) {
-        match self.current_frame() {
-            None => {}
-            Some(current_frame) => match self.last_frame() {
-                None => {
-                    self.current_score += current_frame.last_roll();
-                }
-                Some(last_frame) => {
-                    if last_frame.strike() {
-                        self.current_score += current_frame.last_roll() * 2;
-                    } else if last_frame.spare() {
-                        if current_frame.complete() {
-                            self.current_score += current_frame.last_roll()
-                        } else {
-                            self.current_score += current_frame.last_roll() * 2;
-                        }
-                    } else {
-                        self.current_score += current_frame.last_roll();
-                    }
-                }
-            },
-        }
-    }
-
-    fn last_frame(&self) -> Option<&Frame> {
-        let n = self.frames.len();
-        if n >= 2 {
-            self.frames.get(n - 2)
-        } else {
-            None
-        }
+        self.current_score = self.frames.iter().map(|f| f.total()).sum();
     }
 
     fn current_frame_mut(&mut self) -> Option<&mut Frame> {
         self.frames.last_mut()
-    }
-
-    fn current_frame(&self) -> Option<&Frame> {
-        self.frames.last()
     }
 
     pub fn new() -> Self {
@@ -141,6 +190,13 @@ impl TenPinBowling {
 
 impl Bowling for TenPinBowling {
     fn roll(&mut self, pins: i32) -> Result<(), BowlingError> {
+        if self.finished() {
+            return Err(BowlingError::GameFinished(format!(
+                "Game already finished with {} frames",
+                MAX_FRAMES
+            )));
+        }
+
         if pins <= STRIKE {
             self.update_frames(pins)?;
             Ok(self.update_score())
@@ -155,11 +211,16 @@ impl Bowling for TenPinBowling {
     fn score(&self) -> i32 {
         self.current_score
     }
+
+    fn finished(&self) -> bool {
+        self.frames.len() == MAX_FRAMES && self.frames.last().unwrap().complete(true)
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::{Bowling, TenPinBowling};
+    use crate::BowlingError;
 
     #[test]
     fn test_no_rolls_score_is_zero() {
@@ -213,5 +274,31 @@ mod test {
         let mut bowling = TenPinBowling::new();
         assert!(bowling.roll(4).is_ok());
         assert!(bowling.roll(8).is_err()); // now frame is 11 which is invalid
+    }
+
+    #[test]
+    fn test_max_score() {
+        let mut bowling = TenPinBowling::new();
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert!(bowling.roll(10).is_ok());
+        assert_eq!(300, bowling.score());
+
+        // No more play is allowed after the last frame
+        assert_eq!(
+            Err(BowlingError::GameFinished(format!(
+                "Game already finished with 10 frames"
+            ))),
+            bowling.roll(4)
+        );
     }
 }
