@@ -29,7 +29,6 @@ static MAX_FRAMES: usize = 10;
 struct Frame {
     rolls: Vec<i32>,
     bonus: Vec<i32>,
-    score: i32,
 }
 
 impl Frame {
@@ -43,7 +42,6 @@ impl Frame {
             Ok(Self {
                 rolls: vec![pins],
                 bonus: vec![],
-                score: 0,
             })
         }
     }
@@ -65,11 +63,7 @@ impl Frame {
             )));
         }
 
-        self.rolls.push(pins);
-        if self.can_score() {
-            self.score = self.roll_sum();
-        }
-        Ok(())
+        Ok(self.rolls.push(pins))
     }
 
     fn bonus(&mut self, pins: i32) -> Result<(), BowlingError> {
@@ -127,10 +121,6 @@ impl Frame {
 
     fn bonus_sum(&self) -> i32 {
         self.bonus.iter().sum()
-    }
-
-    fn can_score(&self) -> bool {
-        !self.spare() && !self.strike()
     }
 }
 
