@@ -96,14 +96,21 @@ impl Frame {
 
     fn complete(&self, last: bool) -> bool {
         if last {
-            self.rolls.len() == 3
+            if self.spare() || self.strike() {
+                self.rolls.len() == 3
+            } else {
+                self.rolls.len() == 2
+            }
         } else {
             self.strike() || self.rolls.len() == 2
         }
     }
 
     fn strike(&self) -> bool {
-        self.rolls.len() == 1 && self.rolls[0] == STRIKE
+        match self.rolls.last() {
+            None => false,
+            Some(&r) => r == STRIKE,
+        }
     }
 
     fn spare(&self) -> bool {
@@ -299,6 +306,58 @@ mod test {
                 "Game already finished with 10 frames"
             ))),
             bowling.roll(4)
+        );
+    }
+
+    fn get_score(bowling: &mut TenPinBowling, rolls: &[i32]) -> i32 {
+        rolls.iter().for_each(|&r| bowling.roll(r).unwrap());
+        bowling.score()
+    }
+
+    // Note: tested these values with https://www.bowlinggenius.com/ calculator
+    #[test]
+    fn test_scores() {
+        assert_eq!(3, get_score(&mut TenPinBowling::new(), &[1, 1, 1]));
+        assert_eq!(
+            12,
+            get_score(
+                &mut TenPinBowling::new(),
+                &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            )
+        );
+        assert_eq!(
+            14,
+            get_score(
+                &mut TenPinBowling::new(),
+                &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            )
+        );
+
+        // Just rolling 20 of 1s
+        assert_eq!(
+            20,
+            get_score(
+                &mut TenPinBowling::new(),
+                &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            )
+        );
+
+        // Just rolling 17 of 1s with a spare in last frame allowing one more roll (3)
+        assert_eq!(
+            31,
+            get_score(
+                &mut TenPinBowling::new(),
+                &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 6, 3]
+            )
+        );
+
+        // Just rolling 17 of 1s with a spare in last frame allowing one more roll (3)
+        assert_eq!(
+            48,
+            get_score(
+                &mut TenPinBowling::new(),
+                &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 10, 10, 10]
+            )
         );
     }
 }
