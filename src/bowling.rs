@@ -351,7 +351,7 @@ mod test {
             )
         );
 
-        // Just rolling 17 of 1s with a spare in last frame allowing one more roll (3)
+        // Just rolling 17 of 1s with three strikes in the last frame
         assert_eq!(
             48,
             get_score(
